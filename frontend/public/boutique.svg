@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Ecommerce-Boutique</title>
+  <rect width="32" height="32" rx="8" fill="#143f35"/>
+  <path d="M11 7 5 11l3 6 3-2v11h10V15l3 2 3-6-6-4c-1 4-9 4-10 0Z" fill="#fff" stroke="#fff" stroke-linejoin="round"/>
+</svg>

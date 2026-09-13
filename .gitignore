@@ -1,0 +1,53 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+.env
+.env.*
+!.env.example
+# Keep the shared demo-mode default; machine-specific overrides stay private.
+!frontend/.env.development
+*.user
+.tools/
+
+# IDE state, local settings and credentials
+.vs/
+.idea/
+*.suo
+*.userosscache
+*.sln.docstates
+*.pubxml
+*.publishsettings
+appsettings.*.json
+!appsettings.*.example.json
+secrets.json
+.npmrc
+.netrc
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+id_rsa*
+id_ed25519*
+
+# Local databases, exports, logs and test artifacts
+*.mdf
+*.ldf
+*.ndf
+*.bak
+*.bacpac
+*.sqlite*
+*.db
+*.dump
+*.log
+TestResults/
+coverage/
+*.trx
+
+# Local assistant state
+.codex/
+.agents/
+
+architecture.md
+README.md

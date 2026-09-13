@@ -1,0 +1,64 @@
+import { productPhotos } from './productPhotos.js';
+
+const photo = (id, width = 800) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${width}&q=80`;
+export const demoCategories = [
+  { id: 1, name: 'Playeras', description: 'Básicos para todos los días' },
+  { id: 2, name: 'Gorras', description: 'El detalle que completa tu look' },
+  { id: 3, name: 'Tenis', description: 'Estilo desde el primer paso' },
+  { id: 4, name: 'Sudaderas', description: 'Capas cómodas y versátiles' },
+  { id: 5, name: 'Chamarras', description: 'Tu última capa de estilo' },
+];
+
+// Productos y precios ficticios para presentación. Imágenes locales generadas con IA; metadatos originales conservados como referencia.
+const entries = [
+  [1001, 'Sudadera Essential', 'Una silueta relajada para combinar con tus básicos favoritos.', 799, 4, 'photo-1620799140188-3b2a02fd9a77', 'kJXGTOY1wLQ', 'Mediamodifier'],
+  [1002, 'Gorra Daily', 'Un toque casual para acompañarte todos los días.', 349, 2, 'photo-1588850561407-ed78c282e89b', 't8HiP3e5abg', 'Mediamodifier'],
+  [1003, 'Tenis Street', 'Inspiración urbana para armar tu siguiente outfit.', 1499, 3, 'photo-1600269452121-4f2416e55c28', 'SD9Jyl1xNQ4', 'Jeff Tumale'],
+  [1004, 'Chamarra Denim', 'El clásico de mezclilla que combina con todo.', 1199, 5, 'photo-1483158139813-6143e26269dd', 'FcUC_WrMy4s', 'Angello Pro'],
+  [1005, 'Playera Everyday', 'Un básico versátil para llevar solo o en capas.', 399, 1, 'photo-1581655353564-df123a1eb820', 'acn5ERAeSb4', 'Haryo Setyadi'],
+  [1006, 'Tenis City', 'Líneas sencillas para un look casual de pies a cabeza.', 1299, 3, 'photo-1512374382149-233c42b6a83b', 'SxAXphIPWeg', 'Xavier Teo'],
+  [1007, 'Playera Essential', 'Tu punto de partida para un estilo sin complicaciones.', 349, 1, 'photo-1521572163474-6864f9cf17ab', 'WWesmHEgXDs', 'Anomaly'],
+];
+
+// Cinco artículos adicionales por categoría; cada uno tiene una fotografía diferente.
+const additionalEntries = [
+  [1008, 'Playera Base', 'Una propuesta sencilla para combinar con mezclilla y tenis. Un esencial para crear looks de todos los días.', 329, 1005],
+  [1009, 'Playera Weekend', 'Inspiración casual para tus planes de fin de semana. Combínala con una gorra y tus tenis favoritos.', 429, 1007],
+  [1010, 'Playera District', 'Un punto de partida para un outfit urbano. Úsala sola o como primera capa debajo de una chamarra.', 449, 1005],
+  [1011, 'Playera Studio', 'Estilo discreto que deja espacio a tus accesorios. Una propuesta versátil para completar tu selección.', 379, 1007],
+  [1012, 'Playera Avenue', 'Un básico pensado para inspirar combinaciones sin complicaciones, desde un look relajado hasta uno con más capas.', 499, 1005],
+  [1013, 'Gorra Urban', 'El complemento para un look de ciudad. Combínala con una playera y una chamarra de mezclilla.', 299, 1002],
+  [1014, 'Gorra Weekend', 'Una propuesta casual para acompañar tus planes al aire libre y completar tus básicos favoritos.', 379, 1002],
+  [1015, 'Gorra District', 'Un accesorio de inspiración urbana para dar el toque final a tu outfit de todos los días.', 399, 1002],
+  [1016, 'Gorra Club', 'Un detalle sencillo para combinar con sudaderas, playeras y tenis en una misma selección.', 449, 1002],
+  [1017, 'Gorra Avenue', 'Completa tu look con un accesorio fácil de combinar. Consulta las opciones disponibles con el negocio.', 329, 1002],
+  [1018, 'Tenis Downtown', 'Inspiración de ciudad para combinar con mezclilla y prendas casuales. Consulta tu talla antes de pedir.', 1599, 1003],
+  [1019, 'Tenis Everyday', 'Una propuesta para acompañar tus combinaciones de todos los días, desde playeras hasta chamarras.', 1199, 1006],
+  [1020, 'Tenis District', 'El punto de partida para un outfit urbano. Combínalos con tus básicos y agrega tu toque personal.', 1799, 1003],
+  [1021, 'Tenis Avenue', 'Líneas de inspiración casual para completar tu siguiente look. Confirma tallas y colores con el negocio.', 1399, 1006],
+  [1022, 'Tenis Weekend', 'Una opción de estilo para tus planes de fin de semana. Arma tu selección con playeras y accesorios.', 1699, 1003],
+  [1023, 'Sudadera Weekend', 'Una capa de inspiración relajada para combinar con tenis y mezclilla en tus días libres.', 849, 1001],
+  [1024, 'Sudadera District', 'Estilo urbano para llevar sobre una playera y combinar con tus accesorios favoritos.', 899, 1001],
+  [1025, 'Sudadera Studio', 'Una propuesta sencilla para construir un look por capas. Consulta tallas y colores disponibles.', 749, 1001],
+  [1026, 'Sudadera Avenue', 'Un esencial de inspiración casual para completar tu guardarropa y darle personalidad a tu outfit.', 949, 1001],
+  [1027, 'Sudadera Club', 'Combínala con una gorra y tus tenis favoritos para crear una selección con estilo propio.', 999, 1001],
+  [1028, 'Chamarra District', 'Inspiración en mezclilla para combinar con playeras y tenis. Una última capa para tu look urbano.', 1299, 1004],
+  [1029, 'Chamarra Weekend', 'Una propuesta casual para acompañar tus básicos de fin de semana. Consulta las opciones con el negocio.', 1399, 1004],
+  [1030, 'Chamarra Avenue', 'Dale estructura a tu outfit con una capa de inspiración clásica. Combínala con una playera sencilla.', 1499, 1004],
+  [1031, 'Chamarra Studio', 'Una selección de inspiración denim para explorar combinaciones con tus prendas y accesorios favoritos.', 1599, 1004],
+  [1032, 'Chamarra Downtown', 'Estilo de ciudad para cerrar tu look. Consulta medidas, tallas y disponibilidad antes de confirmar tu pedido.', 1699, 1004],
+];
+for (const [id, name, description, price, referenceId] of additionalEntries) {
+  const reference = entries.find(entry => entry[0] === referenceId);
+  const image = productPhotos.find(item => item.id === id);
+  entries.push([id, name, description, price, reference[4], image.photo, image.source, image.author]);
+}
+export const demoProducts = entries.map(([id, name, description, price, categoryId, image, source, author]) => ({
+  id, name, description, price, categoryId, isActive: true,
+  categoryName: demoCategories.find(c => c.id === categoryId).name,
+  imageUrl: `/images/products/${id}.png`, imageNote: 'Imagen de muestra generada con IA.',
+}));
+export const demoHeroImage = photo('photo-1483158139813-6143e26269dd', 1400);
+
+
+

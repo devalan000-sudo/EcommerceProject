@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme { --color-brand: #143f35; --color-paper: #f7f7f2; }
+body { margin: 0; background: var(--color-paper); color: #182b25; font-family: "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+button, a, select { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), select { cursor: pointer; }
+:focus-visible { outline: 3px solid #a86328; outline-offset: 4px; }
+dialog::backdrop { background: rgb(10 30 24 / 45%); backdrop-filter: blur(3px); }
+
+::selection { background: #d9e3b4; color: #182320; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
+
+
+.shopping-step { transition: border-color 240ms ease, box-shadow 240ms ease; }
+.shopping-step:hover { border-color: rgb(20 63 53 / 25%); box-shadow: 0 8px 24px rgb(20 63 53 / 5%); }
+@media (prefers-reduced-motion: no-preference) {
+  .shopping-step-visible { animation: step-appear 600ms ease-out both; animation-delay: var(--step-delay); }
+  .shopping-step-icon { transition: transform 300ms ease, background-color 300ms ease; }
+  .shopping-step:hover .shopping-step-icon { transform: translateY(-3px) rotate(-4deg); background-color: #d9e3b4; }
+  @keyframes step-appear { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+}
