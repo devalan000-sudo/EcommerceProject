@@ -10,5 +10,14 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.30" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30"><PrivateAssets>all</PrivateAssets></PackageReference>
   </ItemGroup>
+  <Target Name="IncludeFrontendBuild" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <FrontendFiles Include="../../frontend/dist/**/*" />
+      <ResolvedFileToPublish Include="@(FrontendFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot/%(FrontendFiles.RecursiveDir)%(FrontendFiles.Filename)%(FrontendFiles.Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>
 

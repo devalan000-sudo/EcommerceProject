@@ -5,6 +5,19 @@ namespace Catalog.Api.Data;
 
 public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbContext(options)
 {
+    public DbSet<ReturnRequest> ReturnRequests => Set<ReturnRequest>();
+    public DbSet<ReturnReceipt> ReturnReceipts => Set<ReturnReceipt>();
+    public DbSet<ReturnRefund> ReturnRefunds => Set<ReturnRefund>();
+    public DbSet<ReturnRequestItem> ReturnRequestItems => Set<ReturnRequestItem>();
+    public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
+    public DbSet<StoreSettings> StoreSettings => Set<StoreSettings>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<EmailOutbox> EmailOutbox => Set<EmailOutbox>();
+    public DbSet<CustomerEmailToken> CustomerEmailTokens => Set<CustomerEmailToken>();
+    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<InventoryReservation> InventoryReservations => Set<InventoryReservation>();
+    public DbSet<ShippingOption> ShippingOptions => Set<ShippingOption>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<Category> Categories => Set<Category>();
@@ -12,6 +25,16 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        model.ApplyConfiguration(new ReturnConfiguration());
+        ReturnReceiptConfiguration.Configure(model);
+        ReturnRefundConfiguration.Configure(model);
+        model.ApplyConfiguration(new ReturnItemConfiguration());
+        model.ApplyConfiguration(new CustomerAddressConfiguration());
+        model.ApplyConfiguration(new StoreSettingsConfiguration());
+        model.ApplyConfiguration(new OrderConfiguration());
+        EmailConfiguration.Configure(model);
+        CommerceConfiguration.Configure(model);
+        model.ApplyConfiguration(new OrderItemConfiguration());
         model.Entity<Customer>().HasIndex(c => c.NormalizedEmail).IsUnique();
         model.Entity<Customer>().Property(c => c.FirstName).HasMaxLength(100);
         model.Entity<Customer>().Property(c => c.LastName).HasMaxLength(100);
@@ -33,5 +56,29 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
             .HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<Category>().HasData(new Category { Id = 1, Name = "General", Description = "Nuestro catálogo" });
     }
+
+    private void QueueOrderEmails()
+    {
+        foreach (var entry in ChangeTracker.Entries<Order>().Where(e => e.State is EntityState.Added or EntityState.Modified).ToList())
+        {
+            var order = entry.Entity;
+            var kinds = new List<string>();
+            if (entry.State == EntityState.Added) kinds.Add("OrderCreated");
+            else
+            {
+                if (entry.Property(o => o.PaymentStatus).IsModified) kinds.Add($"Payment{order.PaymentStatus}");
+                if (entry.Property(o => o.FulfillmentStatus).IsModified) kinds.Add($"Delivery{order.FulfillmentStatus}");
+            }
+            foreach (var kind in kinds)
+            {
+                var key = $"order:{order.Id}:{kind}";
+                if (!EmailOutbox.Local.Any(m => m.EventKey == key))
+                    EmailOutbox.Add(new() { EventKey = key, OrderId = order.Id, CustomerId = order.CustomerId, Kind = kind });
+            }
+        }
+    }
+    public override int SaveChanges(bool acceptAllChangesOnSuccess) { QueueOrderEmails(); return base.SaveChanges(acceptAllChangesOnSuccess); }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    { QueueOrderEmails(); return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
 }
 

@@ -1,0 +1,31 @@
+server {
+    listen 80;
+    server_name ${STORE_HOST};
+    return 308 https://${STORE_HOST}$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name ${STORE_HOST};
+    ssl_certificate /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 2m;
+    # No registrar URLs con tokens de confirmación o recuperación.
+    access_log off;
+    location /health/ { return 404; }
+    location = /api/admin/images {
+        client_max_body_size 6m;
+        proxy_read_timeout 75s;
+        proxy_pass http://app:8080;
+        proxy_set_header Host ${STORE_HOST};
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+    location / {
+        proxy_pass http://app:8080;
+        proxy_set_header Host ${STORE_HOST};
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
