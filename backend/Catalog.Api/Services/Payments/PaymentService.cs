@@ -11,6 +11,7 @@ public record PaymentSessionDto(string? Url, DateTime? DeadlineUtc, string Statu
 
 public class PaymentService(CatalogDbContext db, InventoryService inventory, StripeGateway stripe)
 {
+    // Inicia o recupera una sesión de Checkout de Stripe para un pedido con tarjeta.
     public async Task<PaymentSessionDto> StartAsync(Guid orderId, int customerId, CancellationToken ct)
     {
         stripe.RequireConfigured();
@@ -23,14 +24,14 @@ public class PaymentService(CatalogDbContext db, InventoryService inventory, Str
             await inventory.ReserveForPaymentAsync(order.Id, customerId, ct, stripeHold: true, frontendUrl: stripe.FrontendUrl());
         db.ChangeTracker.Clear();
         order = await db.Orders.SingleAsync(o => o.Id == orderId, ct);
-        var session = order.StripeSessionId is null ? await CreateRecoverableAsync(order, ct) : await stripe.GetAsync(order.StripeSessionId, ct);
-        if ((order.CancellationPending || order.PaymentDeadlineUtc <= DateTime.UtcNow) && session.GetProperty("status").GetString() == "open")
-            session = await ExpireOrRetrieveAsync(session.GetProperty("id").GetString()!, ct);
+        var session = await LoadOrCreateSessionAsync(order, ct);
+        session = await ExpireSessionIfRequiredAsync(order, session, false, ct);
         await ApplySessionAsync(order.Id, session, ct);
         return new(session.GetProperty("status").GetString() == "open" ? session.GetProperty("url").GetString() : null,
             order.PaymentDeadlineUtc, session.GetProperty("status").GetString()!);
     }
 
+    // Crea una sesión recuperable y guarda su Id solo si el pedido aún no tiene uno.
     private async Task<JsonElement> CreateRecoverableAsync(Order order, CancellationToken ct)
     {
         // Tras una respuesta incierta se usa exactamente la misma clave; nunca se crea otro intento.
@@ -43,32 +44,54 @@ public class PaymentService(CatalogDbContext db, InventoryService inventory, Str
         return session;
     }
 
+    // Intenta expirar una sesión abierta; si Stripe responde con un error de red,
+    // consulta la sesión porque el pago pudo completarse simultáneamente.
     private async Task<JsonElement> ExpireOrRetrieveAsync(string id, CancellationToken ct)
     {
         try { return await stripe.ExpireAsync(id, ct); }
         catch (HttpRequestException) { return await stripe.GetAsync(id, ct); } // Puede haber completado el pago a la vez.
     }
 
+    // Cancela el intento de pago del cliente y libera la reserva cuando corresponde.
     public async Task CancelAsync(Guid orderId, int customerId, CancellationToken ct)
     {
         var order = await db.Orders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == orderId && o.CustomerId == customerId, ct);
         if (order is null || !order.StripeHold) throw new ValidationException("No hay una sesión pendiente para cancelar.");
-        var session = order.StripeSessionId is null ? await CreateRecoverableAsync(order, ct) : await stripe.GetAsync(order.StripeSessionId, ct);
-        if (session.GetProperty("status").GetString() == "open") session = await ExpireOrRetrieveAsync(session.GetProperty("id").GetString()!, ct);
+        var session = await LoadOrCreateSessionAsync(order, ct);
+        session = await ExpireSessionIfRequiredAsync(order, session, true, ct);
         await ApplySessionAsync(orderId, session, ct);
     }
 
+    // Revisa periódicamente una retención Stripe pendiente y sincroniza su estado local.
     public async Task ReconcileAsync(Guid orderId, CancellationToken ct)
     {
         var order = await db.Orders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == orderId && o.StripeHold, ct);
         if (order is null) return;
-        var session = order.StripeSessionId is null ? await CreateRecoverableAsync(order, ct) : await stripe.GetAsync(order.StripeSessionId, ct);
-        if ((order.CancellationPending || order.PaymentDeadlineUtc <= DateTime.UtcNow) && session.GetProperty("status").GetString() == "open")
-            session = await ExpireOrRetrieveAsync(session.GetProperty("id").GetString()!, ct);
+        var session = await LoadOrCreateSessionAsync(order, ct);
+        session = await ExpireSessionIfRequiredAsync(order, session, false, ct);
         await ApplySessionAsync(orderId, session, ct);
     }
 
-    // Solo recibe objetos autenticados: respuesta directa de Stripe o webhook con firma válida.
+    private async Task<JsonElement> LoadOrCreateSessionAsync(Order order, CancellationToken ct) =>
+        order.StripeSessionId is null
+            ? await CreateRecoverableAsync(order, ct)
+            : await stripe.GetAsync(order.StripeSessionId, ct);
+
+    private async Task<JsonElement> ExpireSessionIfRequiredAsync(
+        Order order,
+        JsonElement session,
+        bool cancellationRequested,
+        CancellationToken ct)
+    {
+        var isOpen = session.GetProperty("status").GetString() == "open";
+        var shouldExpire = cancellationRequested || order.CancellationPending || order.PaymentDeadlineUtc <= DateTime.UtcNow;
+        return isOpen && shouldExpire
+            ? await ExpireOrRetrieveAsync(session.GetProperty("id").GetString()!, ct)
+            : session;
+    }
+
+    // Aplica una respuesta autenticada de Stripe y actualiza pago, inventario y reservas.
+    // Solo recibe objetos directos de Stripe o webhooks con firma válida.
     public async Task ApplySessionAsync(Guid orderId, JsonElement session, CancellationToken ct)
     {
         db.ChangeTracker.Clear();
@@ -90,9 +113,12 @@ public class PaymentService(CatalogDbContext db, InventoryService inventory, Str
         if (session.GetProperty("status").GetString() == "complete" && session.GetProperty("payment_status").GetString() == "paid")
         {
             if (reservations.Count == 0 || reservations.Any(r => r.Released)) throw new ValidationException("Pago pendiente de revisión de inventario.");
+            var variantIds = reservations.Select(r => r.VariantId).Distinct().ToArray();
+            var variants = await db.ProductVariants.Where(v => variantIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, ct);
             foreach (var reservation in reservations)
             {
-                var variant = await db.ProductVariants.SingleAsync(v => v.Id == reservation.VariantId, ct);
+                if (!variants.TryGetValue(reservation.VariantId, out var variant))
+                    throw new ValidationException("Inventario inconsistente; requiere revisión.");
                 if (variant.Stock < reservation.Quantity) throw new ValidationException("Inventario inconsistente; requiere revisión.");
                 variant.Stock -= reservation.Quantity; reservation.Released = true;
             }

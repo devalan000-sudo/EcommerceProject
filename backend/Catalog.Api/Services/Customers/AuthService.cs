@@ -9,6 +9,7 @@ namespace Catalog.Api.Services;
 
 public class AuthService(CatalogDbContext db, IPasswordHasher<AdminUser> hasher, TokenService tokens)
 {
+    // Valida las credenciales del administrador y genera un token con rol Admin.
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto dto, CancellationToken ct)
     {
         var user = await db.AdminUsers.SingleOrDefaultAsync(x => x.Username == dto.Username, ct);

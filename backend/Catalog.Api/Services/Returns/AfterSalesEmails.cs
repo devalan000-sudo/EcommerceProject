@@ -6,6 +6,7 @@ namespace Catalog.Api.Services;
 public static class AfterSalesEmails
 {
     // Se guarda en la misma transacción que el cambio comercial. No envía HTTP aquí.
+    // Añade un evento de correo a la cola sin enviarlo durante la transacción.
     public static void Queue(CatalogDbContext db, Order order, string kind, Guid eventId)
     {
         var key = $"aftersales:{kind}:{eventId:N}";
@@ -13,6 +14,7 @@ public static class AfterSalesEmails
             db.EmailOutbox.Add(new EmailOutbox { EventKey = key, Kind = kind, OrderId = order.Id, CustomerId = order.CustomerId });
     }
 
+    // Devuelve el asunto y la descripción asociados a un evento posventa.
     public static (string Subject, string Description)? Message(string kind) => kind switch
     {
         "ReturnApproved" => ("Tu devolución fue aprobada", "El negocio aprobó tu solicitud de devolución. Consulta su respuesta para coordinar la entrega de los artículos. Esta aprobación no confirma un reembolso."),

@@ -8,10 +8,12 @@ namespace Catalog.Api.Services;
 
 public class ShippingService(CatalogDbContext db)
 {
+    // Lista opciones activas para clientes o todas las opciones para administradores.
     public Task<List<ShippingResponseDto>> ListAsync(bool admin, CancellationToken ct) => db.ShippingOptions.AsNoTracking()
         .Where(s => admin || s.IsActive).OrderBy(s => s.Id)
         .Select(s => new ShippingResponseDto(s.Id, s.Name, s.Description, s.Kind, s.Price, s.IsActive)).ToListAsync(ct);
 
+    // Crea o edita una opción de envío.
     public async Task<ShippingResponseDto?> SaveAsync(int? id, ShippingWriteDto dto, CancellationToken ct)
     {
         Validator.ValidateObject(dto, new ValidationContext(dto), true);

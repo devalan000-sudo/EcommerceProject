@@ -9,6 +9,7 @@ namespace Catalog.Api.Services;
 
 public class AdminOrderService(CatalogDbContext db, OrderService orders)
 {
+    // Busca y pagina pedidos para la administración con filtros de negocio.
     public async Task<AdminOrderPage> ListAsync(AdminOrderQuery filter, CancellationToken ct)
     {
         Validator.ValidateObject(filter, new ValidationContext(filter), true);
@@ -29,6 +30,7 @@ public class AdminOrderService(CatalogDbContext db, OrderService orders)
         return new(items, filter.Page, 20, count);
     }
 
+    // Avanza el estado logístico respetando la secuencia permitida y el control de concurrencia.
     public async Task<OrderResponseDto?> UpdateAsync(Guid id, FulfillmentUpdateDto dto, CancellationToken ct)
     {
         Validator.ValidateObject(dto, new ValidationContext(dto), true);
@@ -36,26 +38,42 @@ public class AdminOrderService(CatalogDbContext db, OrderService orders)
         var order = await db.Orders.SingleOrDefaultAsync(o => o.Id == id, ct);
         if (order is null) return null;
         if (order.FulfillmentVersion != dto.Version) throw new DbUpdateConcurrencyException();
+        ValidateFulfillmentUpdate(order, dto);
+        ApplyFulfillmentUpdate(order, dto);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return await orders.GetAsync(id, null, ct);
+    }
+
+    private static void ValidateFulfillmentUpdate(Order order, FulfillmentUpdateDto dto)
+    {
         if (order.CancellationPending || order.RefundRequestId.HasValue)
             throw new ValidationException("El pedido tiene una cancelación o reembolso en curso. Revisa su resultado antes de cambiar la entrega.");
         if (order.FulfillmentStatus is FulfillmentStatus.Cancelled or FulfillmentStatus.Delivered)
             throw new ValidationException("Este pedido ya está cerrado.");
         if (order.PaymentMethod == PaymentMethod.Card && order.PaymentStatus != PaymentStatus.Paid)
             throw new ValidationException("Stripe debe confirmar el pago antes de preparar o enviar el pedido.");
+
         var next = dto.Status!.Value;
         var valid = next == order.FulfillmentStatus || (order.FulfillmentStatus, next) is
             (FulfillmentStatus.PendingConfirmation, FulfillmentStatus.Preparing) or
             (FulfillmentStatus.Preparing, FulfillmentStatus.Shipped) or
             (FulfillmentStatus.Preparing, FulfillmentStatus.Delivered) or
             (FulfillmentStatus.Shipped, FulfillmentStatus.Delivered);
-        if (!valid) throw new ValidationException("El cambio de estado no está permitido. Avanza desde el estado actual.");
+        if (!valid)
+            throw new ValidationException("El cambio de estado no está permitido. Avanza desde el estado actual.");
+
         var carrier = string.IsNullOrWhiteSpace(dto.Carrier) ? null : dto.Carrier.Trim();
         var tracking = string.IsNullOrWhiteSpace(dto.TrackingNumber) ? null : dto.TrackingNumber.Trim();
-        if ((carrier is null) != (tracking is null)) throw new ValidationException("Captura juntos la paquetería y el número de guía, o deja ambos vacíos para entrega local o recogida.");
-        order.FulfillmentStatus = next; order.Carrier = carrier; order.TrackingNumber = tracking;
+        if ((carrier is null) != (tracking is null))
+            throw new ValidationException("Captura juntos la paquetería y el número de guía, o deja ambos vacíos para entrega local o recogida.");
+    }
+
+    private static void ApplyFulfillmentUpdate(Order order, FulfillmentUpdateDto dto)
+    {
+        order.FulfillmentStatus = dto.Status!.Value;
+        order.Carrier = string.IsNullOrWhiteSpace(dto.Carrier) ? null : dto.Carrier.Trim();
+        order.TrackingNumber = string.IsNullOrWhiteSpace(dto.TrackingNumber) ? null : dto.TrackingNumber.Trim();
         order.FulfillmentVersion = Guid.NewGuid();
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return await orders.GetAsync(id, null, ct);
     }
 }

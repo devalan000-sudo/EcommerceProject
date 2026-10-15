@@ -27,6 +27,8 @@ var key = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
     throw new InvalidOperationException($"No se pudo cargar Jwt:Key (mínimo 32 bytes). Entorno actual: {builder.Environment.EnvironmentName}. En Visual Studio selecciona el perfil http del proyecto Catalog.Api y configura Jwt:Key en Administrar secretos de usuario. En producción usa Jwt__Key.");
 
+// Registra el contexto con SQL Server usando ConnectionStrings:DefaultConnection.
+// Falla al iniciar si la cadena no está configurada.
 builder.Services.AddDbContext<CatalogDbContext>(options => options.UseSqlServer(
     builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Configura ConnectionStrings:DefaultConnection.")));
@@ -61,6 +63,7 @@ builder.Services.AddScoped<IPasswordHasher<Customer>, PasswordHasher<Customer>>(
 builder.Services.AddScoped<IPasswordHasher<AdminUser>, PasswordHasher<AdminUser>>();
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
     policy.WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"]).AllowAnyHeader().AllowAnyMethod()));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>

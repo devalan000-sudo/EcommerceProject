@@ -12,17 +12,20 @@ namespace Catalog.Api.Services;
 
 public class ReturnService(CatalogDbContext db)
 {
+    // Explica por qué un pedido no puede iniciar una devolución.
     private static string? Unavailable(Order order) =>
         order.PaymentStatus != PaymentStatus.Paid || order.StripeHold || order.CancellationPending || order.RefundRequestId.HasValue || order.RefundStatus != null
             ? "Solo puedes solicitar devoluciones de pedidos pagados sin cancelación o reembolso en curso."
             : order.FulfillmentStatus is not (FulfillmentStatus.Shipped or FulfillmentStatus.Delivered)
                 ? "Las devoluciones se solicitan después del envío o la entrega. Para cancelar antes, contacta al negocio." : null;
 
+    // Suma las cantidades que ya están comprometidas en solicitudes no rechazadas.
     private async Task<Dictionary<int, int>> Claimed(Guid orderId, CancellationToken ct) =>
         await db.ReturnRequestItems.Where(i => i.ReturnRequest.OrderId == orderId && i.ReturnRequest.Status != ReturnStatus.Rejected)
             .GroupBy(i => i.OrderItemId).Select(g => new { Id = g.Key, Quantity = g.Sum(i => i.Quantity) })
             .ToDictionaryAsync(g => g.Id, g => g.Quantity, ct);
 
+    // Devuelve qué artículos y cantidades todavía pueden solicitarse para devolución.
     public async Task<ReturnOptionsDto?> OptionsAsync(Guid orderId, int customerId, CancellationToken ct)
     {
         var order = await db.Orders.AsNoTracking().Include(o => o.Items).SingleOrDefaultAsync(o => o.Id == orderId && o.CustomerId == customerId, ct);
@@ -33,6 +36,7 @@ public class ReturnService(CatalogDbContext db)
         return new(reason is null, reason, items);
     }
 
+    // Lista devoluciones del cliente o del administrador con filtros y paginación.
     public async Task<ReturnPageDto> ListAsync(int? customerId, Guid? orderId, ReturnStatus? status, int page, CancellationToken ct)
     {
         if (page < 1 || page > 100000 || (status.HasValue && !Enum.IsDefined(status.Value))) throw new ValidationException("Filtro no válido.");
@@ -46,6 +50,7 @@ public class ReturnService(CatalogDbContext db)
         return new(rows.Select(Response).ToList(), page, 20, total);
     }
 
+    // Registra una solicitud de devolución idempotente y valida sus cantidades.
     public async Task<ReturnResponseDto?> CreateAsync(Guid orderId, int customerId, ReturnCreateDto dto, CancellationToken ct)
     {
         Validator.ValidateObject(dto, new ValidationContext(dto), true);
@@ -91,6 +96,7 @@ public class ReturnService(CatalogDbContext db)
         return Response(request);
     }
 
+    // Aprueba o rechaza una solicitud antes de que se reciban los artículos.
     public async Task<ReturnResponseDto?> ReviewAsync(Guid id, int adminId, ReturnReviewDto dto, CancellationToken ct)
     {
         Validator.ValidateObject(dto, new ValidationContext(dto), true);
@@ -109,12 +115,11 @@ public class ReturnService(CatalogDbContext db)
         return Response(request);
     }
 
+    // Registra artículos recibidos y repone únicamente las unidades autorizadas.
     public async Task<ReturnResponseDto?> ReceiveAsync(Guid id, int adminId, ReturnReceiveDto dto, CancellationToken ct)
     {
         Validator.ValidateObject(dto, new ValidationContext(dto), true);
-        if (dto.RequestId == Guid.Empty || dto.Items.Any(i => i is null || i.OrderItemId <= 0 || i.ReceivedQuantity <= 0 || i.RestockedQuantity < 0 || i.RestockedQuantity > i.ReceivedQuantity) ||
-            dto.Items.Select(i => i.OrderItemId).Distinct().Count() != dto.Items.Count)
-            throw new ValidationException("Revisa las cantidades: recibidas positivas, reposición entre cero y lo recibido, sin artículos repetidos.");
+        ValidateReceiveInput(dto);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
             Note = dto.Note.Trim(),
@@ -135,24 +140,8 @@ public class ReturnService(CatalogDbContext db)
             throw new ValidationException("Solo se reciben devoluciones aprobadas con unidades pendientes.");
         if (Unavailable(request.Order) is { } reason) throw new ValidationException(reason);
 
-        var lines = new List<(ReturnRequestItem Item, ReturnReceiveItemDto Input)>();
-        foreach (var input in dto.Items)
-        {
-            var item = request.Items.SingleOrDefault(i => i.OrderItemId == input.OrderItemId);
-            if (item is null || input.ReceivedQuantity > item.Quantity - item.ReceivedQuantity)
-                throw new ValidationException("Un artículo no pertenece a la devolución o supera la cantidad pendiente de recibir.");
-            lines.Add((item, input));
-        }
-        var adjustments = new List<(ProductVariant Variant, int Quantity)>();
-        foreach (var group in lines.Where(l => l.Input.RestockedQuantity > 0).GroupBy(l => l.Item.OrderItem.VariantId).OrderBy(g => g.Key))
-        {
-            var variant = group.Key.HasValue ? await db.ProductVariants.SingleOrDefaultAsync(v => v.Id == group.Key.Value, ct) : null;
-            var quantity = group.Sum(l => (long)l.Input.RestockedQuantity);
-            if (variant is null || group.Any(l => l.Item.OrderItem.ProductId != variant.ProductId || l.Item.OrderItem.Size != variant.Size || l.Item.OrderItem.Color != variant.Color) ||
-                variant.Stock < 0 || quantity > 1000000L - variant.Stock)
-                throw new ValidationException("No se puede reponer una variante eliminada, modificada o sin capacidad. Revisa el inventario o registra la recepción sin reposición.");
-            adjustments.Add((variant, (int)quantity));
-        }
+        var lines = BuildReceiveLines(request, dto);
+        var adjustments = await BuildRestockAdjustmentsAsync(lines, ct);
         // Validar todo antes de modificar; recepción e inventario se confirman juntos.
         foreach (var (variant, quantity) in adjustments) variant.Stock += quantity;
         foreach (var (item, input) in lines) { item.ReceivedQuantity += input.ReceivedQuantity; item.RestockedQuantity += input.RestockedQuantity; }
@@ -174,7 +163,54 @@ public class ReturnService(CatalogDbContext db)
         return Response(request);
     }
 
+    private static List<(ReturnRequestItem Item, ReturnReceiveItemDto Input)> BuildReceiveLines(
+        ReturnRequest request,
+        ReturnReceiveDto dto)
+    {
+        var lines = new List<(ReturnRequestItem Item, ReturnReceiveItemDto Input)>();
+        foreach (var input in dto.Items)
+        {
+            var item = request.Items.SingleOrDefault(i => i.OrderItemId == input.OrderItemId);
+            if (item is null || input.ReceivedQuantity > item.Quantity - item.ReceivedQuantity)
+                throw new ValidationException("Un artículo no pertenece a la devolución o supera la cantidad pendiente de recibir.");
+            lines.Add((item, input));
+        }
+        return lines;
+    }
+
+    private async Task<List<(ProductVariant Variant, int Quantity)>> BuildRestockAdjustmentsAsync(
+        List<(ReturnRequestItem Item, ReturnReceiveItemDto Input)> lines,
+        CancellationToken ct)
+    {
+        var variantIds = lines.Where(l => l.Input.RestockedQuantity > 0 && l.Item.OrderItem.VariantId.HasValue)
+            .Select(l => l.Item.OrderItem.VariantId!.Value).Distinct().ToArray();
+        var variants = await db.ProductVariants.Where(v => variantIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, ct);
+        var adjustments = new List<(ProductVariant Variant, int Quantity)>();
+        foreach (var group in lines.Where(l => l.Input.RestockedQuantity > 0)
+            .GroupBy(l => l.Item.OrderItem.VariantId).OrderBy(g => g.Key))
+        {
+            var variant = group.Key.HasValue && variants.TryGetValue(group.Key.Value, out var loadedVariant) ? loadedVariant : null;
+            var quantity = group.Sum(l => (long)l.Input.RestockedQuantity);
+            if (variant is null || group.Any(l => l.Item.OrderItem.ProductId != variant.ProductId ||
+                    l.Item.OrderItem.Size != variant.Size || l.Item.OrderItem.Color != variant.Color) ||
+                variant.Stock < 0 || quantity > 1000000L - variant.Stock)
+                throw new ValidationException("No se puede reponer una variante eliminada, modificada o sin capacidad. Revisa el inventario o registra la recepción sin reposición.");
+            adjustments.Add((variant, (int)quantity));
+        }
+        return adjustments;
+    }
+
+    private static void ValidateReceiveInput(ReturnReceiveDto dto)
+    {
+        if (dto.RequestId == Guid.Empty || dto.Items.Any(i => i is null || i.OrderItemId <= 0 ||
+                i.ReceivedQuantity <= 0 || i.RestockedQuantity < 0 || i.RestockedQuantity > i.ReceivedQuantity) ||
+            dto.Items.Select(i => i.OrderItemId).Distinct().Count() != dto.Items.Count)
+            throw new ValidationException("Revisa las cantidades: recibidas positivas, reposición entre cero y lo recibido, sin artículos repetidos.");
+    }
+
+    // Convierte una línea del pedido en una línea de devolución.
     private static ReturnItemDto Item(OrderItem i, int quantity, int received = 0, int restocked = 0) => new(i.Id, i.ProductName, i.Size, i.Color, i.ImageUrl, quantity, received, restocked, i.UnitPrice);
+    // Convierte la solicitud completa con sus recepciones y reembolsos.
     private static ReturnResponseDto Response(ReturnRequest r) => new(r.Id, r.OrderId, r.Order.Number, r.Status, r.Reason,
         r.CreatedAtUtc, r.ReviewedAtUtc, r.DecisionNote, r.Version, r.Items.OrderBy(i => i.OrderItemId).Select(i => Item(i.OrderItem, i.Quantity, i.ReceivedQuantity, i.RestockedQuantity)).ToList(),
         r.Receipts.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id).Select(x => new ReturnReceiptDto(x.Id, x.CreatedAtUtc, x.Note,

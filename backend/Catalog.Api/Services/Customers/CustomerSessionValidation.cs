@@ -8,7 +8,9 @@ namespace Catalog.Api.Services;
 
 public static class CustomerSessionValidation
 {
+    // Comprueba que el sello del token siga coincidiendo con la sesión almacenada.
     public static bool Matches(Guid stamp, string? claim) => claim is null ? stamp == Guid.Empty : Guid.TryParse(claim, out var parsed) && parsed == stamp;
+    // Invalida tokens de clientes cuyo sello de seguridad ya cambió.
     public static async Task Validate(TokenValidatedContext context)
     {
         if (context.Principal?.IsInRole("Customer") != true) return;
@@ -22,6 +24,7 @@ public static class CustomerSessionValidation
 public class ConfirmedEmailRequirement : IAuthorizationRequirement { }
 public class ConfirmedEmailHandler(CatalogDbContext db, EmailSettings settings) : AuthorizationHandler<ConfirmedEmailRequirement>
 {
+    // Permite continuar solo a clientes con correo confirmado cuando la política lo exige.
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, ConfirmedEmailRequirement requirement)
     {
         if (!settings.RequireConfirmed) { context.Succeed(requirement); return; }

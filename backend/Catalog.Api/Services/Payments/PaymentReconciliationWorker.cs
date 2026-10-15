@@ -5,6 +5,7 @@ namespace Catalog.Api.Services;
 
 public class PaymentReconciliationWorker(IServiceScopeFactory scopes, ILogger<PaymentReconciliationWorker> logger) : BackgroundService
 {
+    // Revisa periódicamente pagos, retenciones y reembolsos Stripe que quedaron inciertos.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));

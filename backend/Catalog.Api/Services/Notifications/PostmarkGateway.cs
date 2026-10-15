@@ -6,15 +6,18 @@ namespace Catalog.Api.Services;
 
 public class EmailSettings(IConfiguration config)
 {
+    // Indica si el proveedor y la dirección remitente están configurados correctamente.
     public bool Ready => config.GetValue<bool>("Postmark:Enabled") && !string.IsNullOrWhiteSpace(config["Postmark:ServerToken"]) && ValidAddress(config["Postmark:From"]) && ValidUrl(config["Email:FrontendUrl"] ?? "http://localhost:5173");
     public string FrontendUrl => (config["Email:FrontendUrl"] ?? "http://localhost:5173").TrimEnd('/');
     public bool RequireConfirmed => config.GetValue<bool>("Email:RequireConfirmedForCheckout");
+    // Valida que una dirección de correo sea individual y no una lista.
     public static bool ValidAddress(string? value) => MailAddress.TryCreate(value, out var address) && address.Address == value && !value.Contains(',');
     private static bool ValidUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || (uri.Scheme == "http" && uri.IsLoopback)) && uri.Query.Length == 0 && uri.Fragment.Length == 0;
 }
 
 public class PostmarkGateway(HttpClient http, IConfiguration config, EmailSettings settings)
 {
+    // Envía un correo transaccional a Postmark usando el stream configurado.
     public async Task<string> SendAsync(string to, string subject, string text, Guid id, CancellationToken ct)
     {
         if (!settings.Ready || !EmailSettings.ValidAddress(to)) throw new InvalidOperationException("Correo no configurado o destinatario inválido.");

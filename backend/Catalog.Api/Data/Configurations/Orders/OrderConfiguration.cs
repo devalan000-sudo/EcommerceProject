@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Api.Data;
 
+// Configuración Fluent API de Order: índices únicos, longitudes, precisión, estados y relación con Customer.
 public class OrderConfiguration : IEntityTypeConfiguration<Order>
 {
     public void Configure(EntityTypeBuilder<Order> order)
@@ -28,6 +29,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         order.HasIndex(o => o.StripeSessionId).IsUnique().HasFilter("[StripeSessionId] IS NOT NULL");
         order.HasIndex(o => new { o.CustomerId, o.CreatedAtUtc });
         order.Property(o => o.Number).HasMaxLength(40);
+        order.Property(o => o.ShippingName).HasMaxLength(100);
         order.Property(o => o.FirstName).HasMaxLength(100);
         order.Property(o => o.LastName).HasMaxLength(100);
         order.Property(o => o.Email).HasMaxLength(254);
@@ -41,19 +43,5 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         order.Property(o => o.ShippingCost).HasPrecision(18, 2);
         order.Property(o => o.Total).HasPrecision(18, 2);
         order.HasOne(o => o.Customer).WithMany().HasForeignKey(o => o.CustomerId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
-{
-    public void Configure(EntityTypeBuilder<OrderItem> item)
-    {
-        item.Property(i => i.ProductName).HasMaxLength(160);
-        item.Property(i => i.ImageUrl).HasMaxLength(2048);
-        item.Property(i => i.Details).HasMaxLength(200);
-        item.Property(i => i.UnitPrice).HasPrecision(12, 2);
-        item.Property(i => i.LineTotal).HasPrecision(18, 2);
-        item.HasOne(i => i.Order).WithMany(o => o.Items).HasForeignKey(i => i.OrderId).OnDelete(DeleteBehavior.Cascade);
-        item.HasOne(i => i.Product).WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
     }
 }

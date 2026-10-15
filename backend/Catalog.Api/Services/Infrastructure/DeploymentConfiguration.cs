@@ -9,6 +9,8 @@ namespace Catalog.Api.Services;
 
 public static class DeploymentConfiguration
 {
+    // Configuración operativa: exige la cadena y claves en producción, y registra
+    // health checks del despliegue (encabezados reenviados y protección de datos).
     public static void AddDeployment(this WebApplicationBuilder builder)
     {
         var config = builder.Configuration;
@@ -43,6 +45,8 @@ public static class DeploymentConfiguration
 
 public class DatabaseReadinessCheck(CatalogDbContext db) : IHealthCheck
 {
+    // DatabaseReadinessCheck: comprueba que SQL Server responda y no haya
+    // migraciones pendientes antes de declarar listo el contenedor.
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default)
     {
         try

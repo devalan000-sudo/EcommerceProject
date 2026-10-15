@@ -10,14 +10,17 @@ namespace Catalog.Api.Services;
 
 public class StripeGateway(HttpClient http, IConfiguration config)
 {
+    // Indica si existen credenciales de Stripe en modo prueba.
     public bool Enabled => config["Stripe:SecretKey"]?.StartsWith("sk_test_", StringComparison.Ordinal) == true
         && config["Stripe:WebhookSecret"]?.StartsWith("whsec_", StringComparison.Ordinal) == true;
 
+    // Detiene la operación si Stripe no está configurado exclusivamente para pruebas.
     public void RequireConfigured()
     {
         if (!Enabled) throw new InvalidOperationException("Configura Stripe:SecretKey de prueba y Stripe:WebhookSecret en los secretos del backend.");
     }
 
+    // Valida y devuelve la URL que Stripe usará para regresar al checkout.
     public string FrontendUrl()
     {
         var value = config["Stripe:FrontendUrl"] ?? "http://localhost:5173";
@@ -26,6 +29,7 @@ public class StripeGateway(HttpClient http, IConfiguration config)
         return value.TrimEnd('/');
     }
 
+    // Envía una petición autenticada a Stripe y rechaza respuestas de producción.
     private async Task<JsonElement> SendAsync(HttpMethod method, string path, IEnumerable<KeyValuePair<string, string>>? values, string? key, CancellationToken ct, bool requireLiveModeField = true)
     {
         RequireConfigured();
@@ -44,6 +48,7 @@ public class StripeGateway(HttpClient http, IConfiguration config)
         return result;
     }
 
+    // Crea una sesión de Checkout con el total congelado del pedido.
     public Task<JsonElement> CreateAsync(Order order, CancellationToken ct)
     {
         var frontend = order.StripeFrontendUrl ?? FrontendUrl();
@@ -65,9 +70,13 @@ public class StripeGateway(HttpClient http, IConfiguration config)
         };
         return SendAsync(HttpMethod.Post, "checkout/sessions", values, $"checkout-{order.Id:N}", ct);
     }
+    // Consulta una sesión de Checkout existente.
     public Task<JsonElement> GetAsync(string id, CancellationToken ct) => SendAsync(HttpMethod.Get, $"checkout/sessions/{Uri.EscapeDataString(id)}", null, null, ct);
+
+    // Expira una sesión abierta usando una clave idempotente.
     public Task<JsonElement> ExpireAsync(string id, CancellationToken ct) => SendAsync(HttpMethod.Post, $"checkout/sessions/{Uri.EscapeDataString(id)}/expire", [], $"expire-{id}", ct);
     // Refund no incluye livemode. Solo se usa tras validar la sesión y con sk_test_ obligatoria.
+    // Solicita un reembolso total del pedido.
     public Task<JsonElement> RefundAsync(Order order, CancellationToken ct) => SendAsync(HttpMethod.Post, "refunds", new Dictionary<string, string>
     {
         ["payment_intent"] = order.RefundPaymentIntentId!,
@@ -75,7 +84,10 @@ public class StripeGateway(HttpClient http, IConfiguration config)
         ["metadata[order_id]"] = order.Id.ToString(),
         ["metadata[request_id]"] = order.RefundRequestId!.Value.ToString()
     }, $"refund-{order.Id:N}-{order.RefundRequestId:N}", ct, false);
+    // Consulta un reembolso existente para completar una reconciliación.
     public Task<JsonElement> GetRefundAsync(string id, CancellationToken ct) => SendAsync(HttpMethod.Get, $"refunds/{Uri.EscapeDataString(id)}", null, null, ct, false);
+
+    // Solicita un reembolso parcial asociado a una devolución física.
     public Task<JsonElement> RefundReturnAsync(ReturnRefund refund, Guid orderId, CancellationToken ct) => SendAsync(HttpMethod.Post, "refunds", new Dictionary<string, string>
     {
         ["payment_intent"] = refund.PaymentIntentId!,
@@ -84,6 +96,7 @@ public class StripeGateway(HttpClient http, IConfiguration config)
         ["metadata[return_refund_id]"] = refund.Id.ToString()
     }, $"return-refund-{refund.Id:N}", ct, false);
 
+    // Verifica la firma y el modo de un webhook recibido de Stripe.
     public JsonElement VerifyWebhook(string body, string signature)
     {
         RequireConfigured();
@@ -93,6 +106,7 @@ public class StripeGateway(HttpClient http, IConfiguration config)
 
 public static class StripeWebhook
 {
+    // Valida timestamp, firma HMAC y que el evento pertenezca al modo de pruebas.
     public static JsonElement Verify(string body, string signature, string secret, DateTimeOffset now)
     {
         var parts = signature.Split(',').Select(p => p.Trim().Split('=', 2)).Where(p => p.Length == 2).ToList();

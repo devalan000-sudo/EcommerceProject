@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Api.Data;
 
+// Configuración Fluent API de CustomerAddress: longitudes, dirección predeterminada única por cliente y versión concurrente.
 public class CustomerAddressConfiguration : IEntityTypeConfiguration<CustomerAddress>
 {
     public void Configure(EntityTypeBuilder<CustomerAddress> b)

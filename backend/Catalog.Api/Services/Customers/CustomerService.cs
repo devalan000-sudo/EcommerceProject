@@ -8,8 +8,11 @@ namespace Catalog.Api.Services;
 
 public class CustomerService(CatalogDbContext db, IPasswordHasher<Customer> hasher, TokenService tokens, CustomerEmailService? emails = null)
 {
+    // Normaliza el correo para que la unicidad no dependa de mayúsculas o espacios.
     public static string NormalizeEmail(string email) => email.Trim().ToUpperInvariant();
+    // Convierte una entidad de cliente en la respuesta pública sin exponer su contraseña.
     private static CustomerResponseDto Response(Customer user) => new(user.Id, user.FirstName, user.LastName, user.Phone, user.Email, user.Address, user.EmailConfirmed);
+    // Copia y limpia los datos editables del perfil.
     private static void Apply(Customer user, CustomerProfileDto dto)
     {
         user.FirstName = dto.FirstName.Trim(); user.LastName = dto.LastName.Trim();
@@ -17,18 +20,21 @@ public class CustomerService(CatalogDbContext db, IPasswordHasher<Customer> hash
         user.Email = dto.Email.Trim(); user.NormalizedEmail = NormalizeEmail(dto.Email);
         if (dto.Address is not null) user.Address = dto.Address.Trim();
     }
+    // Comprueba la unicidad del correo antes de registrar o editar una cuenta.
     private async Task EnsureEmailAvailable(string email, int? exceptId, CancellationToken ct)
     {
         var normalized = NormalizeEmail(email);
         if (await db.Customers.AnyAsync(c => c.NormalizedEmail == normalized && c.Id != exceptId, ct))
             throw new DuplicateEmailException();
     }
+    // Guarda cambios y traduce una carrera de índice único a un error de dominio.
     private async Task Save(CancellationToken ct)
     {
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         { throw new DuplicateEmailException(); }
     }
+    // Registra un cliente, almacena su contraseña con hash y prepara la confirmación de correo.
     public async Task<RegistrationResponseDto> RegisterAsync(CustomerRegisterDto dto, CancellationToken ct)
     {
         if (emails is not null && !emails.Ready)
@@ -42,6 +48,7 @@ public class CustomerService(CatalogDbContext db, IPasswordHasher<Customer> hash
         await tx.CommitAsync(ct);
         return new(user.Email, true, "Cuenta creada. Revisa tu correo y confirma la dirección antes de iniciar sesión.");
     }
+    // Valida el acceso del cliente y exige que su correo esté confirmado.
     public async Task<LoginResponseDto?> LoginAsync(CustomerLoginDto dto, CancellationToken ct)
     {
         var normalized = NormalizeEmail(dto.Email);
@@ -54,11 +61,13 @@ public class CustomerService(CatalogDbContext db, IPasswordHasher<Customer> hash
         { user.PasswordHash = hasher.HashPassword(user, dto.Password); await db.SaveChangesAsync(ct); }
         return tokens.Create(user.Id, user.Email, "Customer", user.SecurityStamp);
     }
+    // Obtiene el perfil de un cliente sin devolver datos sensibles.
     public async Task<CustomerResponseDto?> GetAsync(int id, CancellationToken ct)
     {
         var user = await db.Customers.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct);
         return user is null ? null : Response(user);
     }
+    // Actualiza el perfil y revoca la sesión si el cliente cambia su correo.
     public async Task<CustomerResponseDto?> UpdateAsync(int id, CustomerProfileDto dto, CancellationToken ct)
     {
         var user = await db.Customers.FindAsync([id], ct);

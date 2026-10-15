@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Catalog.Api.Migrations
 {
     [DbContext(typeof(CatalogDbContext))]
-    [Migration("20260921151823_AddReturnRequests")]
-    partial class AddReturnRequests
+    [Migration("20261012001653_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -687,6 +687,10 @@ namespace Catalog.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -707,6 +711,165 @@ namespace Catalog.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("ProductVariants");
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AdminId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("ReturnRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReturnRequestId", "ClientRequestId")
+                        .IsUnique();
+
+                    b.ToTable("ReturnReceipts");
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnReceiptItem", b =>
+                {
+                    b.Property<Guid>("ReturnReceiptId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReceivedQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RestockedQuantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("ReturnReceiptId", "OrderItemId");
+
+                    b.HasIndex("OrderItemId");
+
+                    b.ToTable("ReturnReceiptItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReceiptItem_Quantities", "[ReceivedQuantity] > 0 AND [RestockedQuantity] >= 0 AND [RestockedQuantity] <= [ReceivedQuantity]");
+                        });
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnRefund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AdminId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ManualReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PaymentIntentId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("ReturnRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("StripeRefundId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StripeRefundId")
+                        .IsUnique()
+                        .HasFilter("[StripeRefundId] IS NOT NULL");
+
+                    b.HasIndex("ReturnRequestId", "ClientRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.ToTable("ReturnRefunds", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReturnRefund_Amount", "[Amount] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnRefundItem", b =>
+                {
+                    b.Property<Guid>("ReturnRefundId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.HasKey("ReturnRefundId", "OrderItemId");
+
+                    b.HasIndex("OrderItemId");
+
+                    b.ToTable("ReturnRefundItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReturnRefundItem_Quantity", "[Quantity] > 0 AND [UnitPrice] > 0");
+                        });
                 });
 
             modelBuilder.Entity("Catalog.Api.Entities.ReturnRequest", b =>
@@ -775,6 +938,12 @@ namespace Catalog.Api.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
+                    b.Property<int>("ReceivedQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RestockedQuantity")
+                        .HasColumnType("int");
+
                     b.HasKey("ReturnRequestId", "OrderItemId");
 
                     b.HasIndex("OrderItemId");
@@ -782,6 +951,8 @@ namespace Catalog.Api.Migrations
                     b.ToTable("ReturnRequestItems", null, t =>
                         {
                             t.HasCheckConstraint("CK_ReturnItem_Quantity", "[Quantity] > 0");
+
+                            t.HasCheckConstraint("CK_ReturnItem_Received", "[ReceivedQuantity] >= 0 AND [ReceivedQuantity] <= [Quantity] AND [RestockedQuantity] >= 0 AND [RestockedQuantity] <= [ReceivedQuantity]");
                         });
                 });
 
@@ -1060,6 +1231,62 @@ namespace Catalog.Api.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnReceipt", b =>
+                {
+                    b.HasOne("Catalog.Api.Entities.ReturnRequest", "ReturnRequest")
+                        .WithMany("Receipts")
+                        .HasForeignKey("ReturnRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReturnRequest");
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnReceiptItem", b =>
+                {
+                    b.HasOne("Catalog.Api.Entities.OrderItem", null)
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Catalog.Api.Entities.ReturnReceipt", "ReturnReceipt")
+                        .WithMany("Items")
+                        .HasForeignKey("ReturnReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReturnReceipt");
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnRefund", b =>
+                {
+                    b.HasOne("Catalog.Api.Entities.ReturnRequest", "ReturnRequest")
+                        .WithMany("Refunds")
+                        .HasForeignKey("ReturnRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReturnRequest");
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnRefundItem", b =>
+                {
+                    b.HasOne("Catalog.Api.Entities.OrderItem", null)
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Catalog.Api.Entities.ReturnRefund", "ReturnRefund")
+                        .WithMany("Items")
+                        .HasForeignKey("ReturnRefundId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReturnRefund");
+                });
+
             modelBuilder.Entity("Catalog.Api.Entities.ReturnRequest", b =>
                 {
                     b.HasOne("Catalog.Api.Entities.Order", "Order")
@@ -1105,9 +1332,23 @@ namespace Catalog.Api.Migrations
                     b.Navigation("Reservations");
                 });
 
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnReceipt", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Catalog.Api.Entities.ReturnRefund", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("Catalog.Api.Entities.ReturnRequest", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("Receipts");
+
+                    b.Navigation("Refunds");
                 });
 #pragma warning restore 612, 618
         }

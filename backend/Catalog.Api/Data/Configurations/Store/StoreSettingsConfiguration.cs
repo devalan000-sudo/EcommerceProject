@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Api.Data;
 
+// Configuración Fluent API de StoreSettings: tabla única (Id=1), longitudes, valores por defecto y versión concurrente.
 public class StoreSettingsConfiguration : IEntityTypeConfiguration<StoreSettings>
 {
     public void Configure(EntityTypeBuilder<StoreSettings> b)

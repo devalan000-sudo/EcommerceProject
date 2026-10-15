@@ -1,22 +1,17 @@
 using Catalog.Api.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Api.Data;
 
-public static class ReturnReceiptConfiguration
+// Configuración Fluent API de ReturnReceipt: índice único por solicitud y longitudes del hash y la nota.
+public class ReturnReceiptConfiguration : IEntityTypeConfiguration<ReturnReceipt>
 {
-    public static void Configure(ModelBuilder model)
+    public void Configure(EntityTypeBuilder<ReturnReceipt> receipt)
     {
-        var receipt = model.Entity<ReturnReceipt>();
         receipt.HasOne(r => r.ReturnRequest).WithMany(r => r.Receipts).HasForeignKey(r => r.ReturnRequestId).OnDelete(DeleteBehavior.Restrict);
         receipt.HasIndex(r => new { r.ReturnRequestId, r.ClientRequestId }).IsUnique();
         receipt.Property(r => r.RequestHash).HasMaxLength(64);
         receipt.Property(r => r.Note).HasMaxLength(1000);
-        var item = model.Entity<ReturnReceiptItem>();
-        item.HasKey(i => new { i.ReturnReceiptId, i.OrderItemId });
-        item.HasOne(i => i.ReturnReceipt).WithMany(r => r.Items).HasForeignKey(i => i.ReturnReceiptId).OnDelete(DeleteBehavior.Cascade);
-        item.HasOne<OrderItem>().WithMany().HasForeignKey(i => i.OrderItemId).OnDelete(DeleteBehavior.Restrict);
-        item.ToTable("ReturnReceiptItems", t => t.HasCheckConstraint("CK_ReceiptItem_Quantities", "[ReceivedQuantity] > 0 AND [RestockedQuantity] >= 0 AND [RestockedQuantity] <= [ReceivedQuantity]"));
-        model.Entity<ReturnRequestItem>().ToTable("ReturnRequestItems", t => t.HasCheckConstraint("CK_ReturnItem_Received", "[ReceivedQuantity] >= 0 AND [ReceivedQuantity] <= [Quantity] AND [RestockedQuantity] >= 0 AND [RestockedQuantity] <= [ReceivedQuantity]"));
     }
 }

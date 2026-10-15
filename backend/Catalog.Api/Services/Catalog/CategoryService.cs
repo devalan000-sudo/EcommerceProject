@@ -8,9 +8,11 @@ namespace Catalog.Api.Services;
 
 public class CategoryService(CatalogDbContext db)
 {
+    // Devuelve las categorías ordenadas para el catálogo y el panel administrativo.
     public Task<List<CategoryResponseDto>> ListAsync(CancellationToken ct) => db.Categories.AsNoTracking()
         .OrderBy(c => c.Name).Select(c => new CategoryResponseDto(c.Id, c.Name, c.Description)).ToListAsync(ct);
 
+    // Crea una categoría después de recortar el nombre recibido.
     public async Task<CategoryResponseDto> CreateAsync(CategoryWriteDto dto, CancellationToken ct)
     {
         var category = new Category { Name = dto.Name.Trim(), Description = dto.Description };
@@ -19,6 +21,7 @@ public class CategoryService(CatalogDbContext db)
         return new(category.Id, category.Name, category.Description);
     }
 
+    // Actualiza una categoría existente y devuelve false si el Id no existe.
     public async Task<bool> UpdateAsync(int id, CategoryWriteDto dto, CancellationToken ct)
     {
         var category = await db.Categories.FindAsync([id], ct);
@@ -29,6 +32,7 @@ public class CategoryService(CatalogDbContext db)
         return true;
     }
 
+    // Elimina una categoría solo cuando ningún producto, incluso inactivo, la utiliza.
     public async Task<string> DeleteAsync(int id, CancellationToken ct)
     {
         var category = await db.Categories.FindAsync([id], ct);

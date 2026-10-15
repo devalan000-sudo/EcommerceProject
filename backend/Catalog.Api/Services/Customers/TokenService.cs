@@ -7,6 +7,7 @@ namespace Catalog.Api.Services;
 
 public class TokenService(IConfiguration config)
 {
+    // Genera un JWT con identidad, rol y vigencia para el usuario autenticado.
     public LoginResponseDto Create(int id, string name, string role, Guid? securityStamp = null)
     {
         var expires = DateTime.UtcNow.AddMinutes(60);
