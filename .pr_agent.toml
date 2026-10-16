@@ -1,0 +1,36 @@
+# Qodo repository-level configuration for GitHub App reviews.
+# Install/authorize Qodo on the GitHub repository before this file takes effect.
+
+[github_app]
+pr_commands = [
+    "/agentic_describe",
+    "/agentic_review"
+]
+
+[review_agent]
+comments_location_policy = "both"
+inline_comments_severity_threshold = 2
+
+issues_user_guidelines = """
+Review this repository as a production e-commerce application.
+
+Prioritize actionable findings over style suggestions. Pay special attention to:
+- authorization and customer/admin data isolation;
+- payment, Stripe webhook, refund, and reconciliation idempotency;
+- inventory reservations, stock races, transactions, and concurrency;
+- accidental exposure of secrets, tokens, personal data, or payment data;
+- EF Core query performance, N+1 queries, and cancellation token usage;
+- API status-code contracts and backwards compatibility;
+- tests covering changed behavior.
+
+Do not request broad architectural rewrites or new abstractions unless the change
+creates a concrete correctness, security, performance, or maintainability risk.
+Respect the existing service-oriented structure and keep controllers thin.
+"""
+
+compliance_user_guidelines = """
+Flag committed credentials, private keys, connection strings with passwords,
+Stripe/Postmark/Cloudinary secrets, JWT signing keys, and sensitive customer data.
+Treat test fixtures such as sk_test_unit_fixture and whsec_unit_fixture as safe
+only when they are clearly non-functional test values.
+"""
