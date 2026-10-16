@@ -21,13 +21,24 @@
 appsettings.*.json
 !appsettings.*.example.json
 secrets.json
+secrets.*
+**/secrets.*
+**/*credentials*.*
 .npmrc
 .netrc
 *.pem
 *.key
+*.crt
+*.cer
+*.csr
+*.der
 *.pfx
 *.p12
 *.jks
+*.ovpn
+*.tfvars
+*.tfstate
+*.tfstate.*
 id_rsa*
 id_ed25519*
 
@@ -43,11 +54,20 @@ id_ed25519*
 *.log
 TestResults/
 coverage/
+deploy/production.env
+deploy/*.env
+deploy/tls/
+publish/
 *.trx
 
 # Local assistant state
 .codex/
 .agents/
+
+# Local documentation and code-analysis notes
+docs/
+*.md
+*.mdx
 
 architecture.md
 README.md

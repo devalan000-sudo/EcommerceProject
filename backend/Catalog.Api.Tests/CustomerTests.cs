@@ -23,23 +23,46 @@ public class CustomerTests : IDisposable
         connection.Open();
         db = new(new DbContextOptionsBuilder<CatalogDbContext>().UseSqlite(connection).Options);
         db.Database.EnsureCreated();
-        tokens = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
-            ["Jwt:Key"] = "test-only-key-at-least-thirty-two-bytes-long", ["Jwt:Issuer"] = "test", ["Jwt:Audience"] = "test"
+        tokens = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = "test-only-key-at-least-thirty-two-bytes-long",
+            ["Jwt:Issuer"] = "test",
+            ["Jwt:Audience"] = "test"
         }).Build());
         service = new(db, new PasswordHasher<Customer>(), tokens);
     }
-    private static CustomerRegisterDto User(string email) => new() {
-        FirstName = "Ana", LastName = "López", Email = email, Address = "Calle Uno 123, Centro, Ciudad, CP 12345, México", Password = "Test-password-1234"
+    private static CustomerRegisterDto User(string email) => new()
+    {
+        FirstName = "Ana",
+        LastName = "López",
+        Email = email,
+        Address = "Calle Uno 123, Centro, Ciudad, CP 12345, México",
+        Password = "Test-password-1234"
     };
+    [Fact]
+    public async Task RegistrationDoesNotRequireAddressAndProfileEditPreservesLegacyAddress()
+    {
+        var dto = User("address@example.test"); dto.Address = null;
+        System.ComponentModel.DataAnnotations.Validator.ValidateObject(dto, new(dto), true);
+        await service.RegisterAsync(dto, default);
+        var user = await db.Customers.SingleAsync();
+        Assert.Equal("", user.Address);
+        user.Address = "Dirección histórica"; await db.SaveChangesAsync();
+        await service.UpdateAsync(user.Id, new CustomerProfileDto { FirstName = "Ana", LastName = "López", Email = user.Email }, default);
+        Assert.Equal("Dirección histórica", user.Address);
+    }
+
     [Fact]
     public async Task RegistrationNormalizesEmailHashesPasswordAndRejectsDuplicates()
     {
-        var session = await service.RegisterAsync(User(" Ana@Example.com "), default);
+        var registration = await service.RegisterAsync(User(" Ana@Example.com "), default);
         var user = await db.Customers.SingleAsync();
         Assert.Equal("ANA@EXAMPLE.COM", user.NormalizedEmail);
         Assert.Null(user.Phone);
         Assert.NotEqual("Test-password-1234", user.PasswordHash);
-        Assert.Equal("Customer", new JwtSecurityTokenHandler().ReadJwtToken(session.Token).Claims.Single(c => c.Type == ClaimTypes.Role).Value);
+        Assert.True(registration.RequiresEmailConfirmation);
+        Assert.Null(await service.LoginAsync(new("ANA@example.com", "Test-password-1234"), default));
+        user.EmailConfirmed = true; await db.SaveChangesAsync();
         await Assert.ThrowsAsync<DuplicateEmailException>(() => service.RegisterAsync(User("ana@example.com"), default));
         Assert.NotNull(await service.LoginAsync(new("ANA@example.com", "Test-password-1234"), default));
         Assert.Null(await service.LoginAsync(new("ana@example.com", "incorrect"), default));

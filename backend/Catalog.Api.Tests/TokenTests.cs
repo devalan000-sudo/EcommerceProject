@@ -15,15 +15,25 @@ public class TokenTests
     [InlineData("Customer")]
     public void TokenHasValidSignatureIdentityRoleAndOneHourExpiry(string role)
     {
-        var service = new TokenService(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
-            ["Jwt:Key"] = TestKey, ["Jwt:Issuer"] = "test-issuer", ["Jwt:Audience"] = "test-audience"
+        var service = new TokenService(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = TestKey,
+            ["Jwt:Issuer"] = "test-issuer",
+            ["Jwt:Audience"] = "test-audience"
         }).Build());
         var before = DateTime.UtcNow;
         var result = service.Create(42, "test-user", role);
-        var parameters = new TokenValidationParameters {
-            ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestKey)),
-            ValidateIssuer = true, ValidIssuer = "test-issuer", ValidateAudience = true, ValidAudience = "test-audience",
-            ValidateLifetime = true, ClockSkew = TimeSpan.Zero, ValidAlgorithms = [SecurityAlgorithms.HmacSha256]
+        var parameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestKey)),
+            ValidateIssuer = true,
+            ValidIssuer = "test-issuer",
+            ValidateAudience = true,
+            ValidAudience = "test-audience",
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256]
         };
         var handler = new JwtSecurityTokenHandler();
         var principal = handler.ValidateToken(result.Token, parameters, out var validated);

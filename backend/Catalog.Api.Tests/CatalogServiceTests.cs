@@ -26,9 +26,13 @@ public class CatalogServiceTests : IDisposable
     public async Task ProductCrudPreservesCategoryAndVisibilityRules()
     {
         var category = await categories.CreateAsync(new(" Ropa ", "Colección"), default);
-        var created = await products.CreateAsync(new ProductCreateDto {
-            Name = " Playera ", Description = "Algodón", Price = 349.50m,
-            ImageUrl = "https://example.com/a.png", CategoryId = category.Id
+        var created = await products.CreateAsync(new ProductCreateDto
+        {
+            Name = " Playera ",
+            Description = "Algodón",
+            Price = 349.50m,
+            ImageUrl = "https://example.com/a.png",
+            CategoryId = category.Id
         }, default);
         Assert.Equal("Playera", created.Name);
         Assert.Equal("Ropa", created.CategoryName);
@@ -37,9 +41,14 @@ public class CatalogServiceTests : IDisposable
         Assert.False(await products.CategoryExistsAsync(int.MaxValue, default));
         Assert.Contains(await products.ListAsync(false, default), p => p.Id == created.Id);
 
-        Assert.True(await products.UpdateAsync(created.Id, new ProductUpdateDto {
-            Name = " Playera nueva ", Description = "Actualizada", Price = 399,
-            ImageUrl = "https://example.com/b.png", CategoryId = 1, IsActive = false
+        Assert.True(await products.UpdateAsync(created.Id, new ProductUpdateDto
+        {
+            Name = " Playera nueva ",
+            Description = "Actualizada",
+            Price = 399,
+            ImageUrl = "https://example.com/b.png",
+            CategoryId = 1,
+            IsActive = false
         }, default));
         Assert.Null(await products.GetAsync(created.Id, false, default));
         Assert.DoesNotContain(await products.ListAsync(false, default), p => p.Id == created.Id);
